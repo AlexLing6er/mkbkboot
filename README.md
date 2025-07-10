@@ -8,7 +8,7 @@
 ## 快速使用
 ### 全自动传参（CI / 自动化）
 ```bash
-curl -sSL https://raw.githubusercontent.com/AlexLing6er/mkbkboot/main/bootstrap_vpn.sh \
+curl -sSL https://raw.githubusercontent.com/AlexLing6er/mkbkboot/main/mkbkboot.sh \
   | sudo bash -s -- <DOMAIN> [EMAIL]
 ```
 | 参数       | 是否必填 | 说明           | 默认值           |
@@ -20,6 +20,6 @@ curl -sSL https://raw.githubusercontent.com/AlexLing6er/mkbkboot/main/bootstrap_
 ### 零参数交互式（最省心）
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/AlexLing6er/mkbkboot/main/bootstrap_vpn.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/AlexLing6er/mkbkboot/main/mkbkboot.sh | sudo bash
 ```
 
