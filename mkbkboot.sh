@@ -1,94 +1,76 @@
 #!/usr/bin/env bash
-# 为新 VPS 创建 Swap 并申请 Let's Encrypt 证书（全程交互）
-# 直接执行：curl -sSL https://raw.githubusercontent.com/AlexLing6er/mkbkboot/main/mkbkboot.sh | sudo bash
-set -euo pipefail
+# mkbkboot v2 — 幂等 + 自检 + 日志
+# curl -sSL https://raw.githubusercontent.com/AlexLing6er/mkbkboot/main/mkbkboot_v2.sh | sudo bash
+set -Eeuo pipefail
+trap 'echo -e "\n❌ 脚本中断或出错！请查看 /var/log/mkbkboot.log"; exit 1' ERR
 
-########################################
-# 0. 工具函数——强制从终端交互读取输入   #
-########################################
-prompt() {                          # $1 提示文字  $2 默认值
-  local tip="$1" default="$2" v
-  while true; do
-    read -r -p "$tip [$default]: " v </dev/tty
-    v="${v:-$default}"
-    [[ -n "$v" ]] && { printf '%s' "$v"; return; }
-  done
-}
+# ------------- 日志重定向 -------------
+exec > >(tee -a /var/log/mkbkboot.log) 2>&1
+echo -e "\n================ $(date) ================"
 
-valid_domain() { [[ "$1" =~ ^([A-Za-z0-9-]+\.)+[A-Za-z]{2,}$ ]]; }
-valid_email()  { [[ "$1" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; }
-valid_int()    { [[ "$1" =~ ^[1-9][0-9]*$ ]]; }
+# ------------- 工具函数 -------------
+prompt() { local t="$1" d="$2" v; while true; do read -r -p "$t [$d]: " v </dev/tty; v="${v:-$d}"; [[ -n "$v" ]] && { printf '%s' "$v"; return; }; done; }
+is_domain() { [[ "$1" =~ ^([A-Za-z0-9-]+\.)+[A-Za-z]{2,}$ ]]; }
+is_email()  { [[ "$1" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; }
+is_int()    { [[ "$1" =~ ^[1-9][0-9]*$ ]]; }
 
-########################################
-# 1. 交互收集：域名 / 邮箱 / Swap GB   #
-########################################
-while true; do
-  DOMAIN="$(prompt '请输入要签发证书的域名 (必填)' vpn.example.com)"
-  valid_domain "$DOMAIN" && break
-  echo "❌ 域名格式不正确，请重新输入！"
-done
+# ------------- 交互输入 -------------
+while true; do DOMAIN="$(prompt '要签发证书的域名 (必填)' vpn.example.com)"; is_domain "$DOMAIN" && break; echo "❌ 域名格式错误"; done
+while true; do EMAIL="$(prompt '通知邮箱 (回车默认)' "root@$DOMAIN")"; is_email "$EMAIL" && break; echo "❌ 邮箱格式错误"; done
+while true; do SWAP_GB="$(prompt 'Swap 大小 GB' 2)"; is_int "$SWAP_GB" && break; echo "❌ 请输入正整数"; done
+echo -e "➡️  域名:$DOMAIN  邮箱:$EMAIL  Swap:${SWAP_GB}G\n"
 
-while true; do
-  EMAIL="$(prompt '请输入通知邮箱 (可回车默认)' "root@$DOMAIN")"
-  valid_email "$EMAIL" && break
-  echo "❌ 邮箱格式不正确，请重新输入！"
-done
-
-while true; do
-  SWAP_GB="$(prompt '请输入 Swap 大小 (GB)' 2)"
-  valid_int "$SWAP_GB" && break
-  echo "❌ 请输入正整数！"
-done
-
-echo -e "\n➡️ 域名: $DOMAIN\n📧 邮箱: $EMAIL\n💾 Swap: ${SWAP_GB}GB\n"
-
-########################################
-# 2. 创建 Swap                         #
-########################################
-SWAPFILE="/swapfile"
-echo "=== [1/3] 创建 ${SWAP_GB} GB Swap ==="
-if ! grep -q "$SWAPFILE" /etc/fstab; then
-  dd if=/dev/zero of="$SWAPFILE" bs=1M count=$((SWAP_GB*1024)) status=progress
-  chmod 600 "$SWAPFILE"
-  mkswap "$SWAPFILE"
-  swapon "$SWAPFILE"
-  echo "$SWAPFILE none swap sw 0 0" >> /etc/fstab
-  sysctl -w vm.swappiness=10
+# ------------- 步骤 1：Swap -------------
+SWAPFILE=/swapfile
+if swapon --noheadings | grep -q "$SWAPFILE"; then
+  echo "✔️  Swap 已挂载"
 else
-  echo "Swap 已存在，跳过创建。"
+  if [[ -f $SWAPFILE ]]; then
+    SIZE_ON_DISK=$(stat -c%s "$SWAPFILE")
+    EXPECT=$((SWAP_GB*1024*1024*1024))
+    if [[ $SIZE_ON_DISK -ne $EXPECT ]]; then
+      echo "⚠️  检测到 /swapfile 大小不符 (${SIZE_ON_DISK} vs ${EXPECT})，请手动删除后重跑"; exit 1
+    fi
+    echo "🔄  检测到 /swapfile 未启用，正在 swapon..."
+    chmod 600 "$SWAPFILE"; mkswap "$SWAPFILE"; swapon "$SWAPFILE"
+  else
+    echo "⬜  创建 ${SWAP_GB}G Swap..."
+    dd if=/dev/zero of="$SWAPFILE" bs=1M count=$((SWAP_GB*1024)) status=progress conv=fsync
+    chmod 600 "$SWAPFILE"; mkswap "$SWAPFILE"; swapon "$SWAPFILE"
+    echo "$SWAPFILE none swap sw 0 0" >> /etc/fstab
+    sysctl -w vm.swappiness=10
+  fi
 fi
 swapon --show
 
-########################################
-# 3. 安装 Certbot（snap 方式）         #
-########################################
-echo "=== [2/3] 安装 Certbot（snap 方式） ==="
+# ------------- 步骤 2：Certbot 安装 -------------
 if ! command -v certbot >/dev/null 2>&1; then
+  echo "⬜  安装 snapd & certbot..."
   apt update && apt install -y snapd
   snap install core && snap refresh core
   snap install --classic certbot
   ln -sf /snap/bin/certbot /usr/bin/certbot
 else
-  echo "Certbot 已安装，跳过。"
+  echo "✔️  Certbot 已安装"
 fi
 
-########################################
-# 4. 申请证书                          #
-########################################
-echo "=== [3/3] 申请证书 ==="
-certbot certonly --standalone \
-  -d "$DOMAIN" \
-  -m "$EMAIL" \
-  --agree-tos \
-  --non-interactive \
-  --preferred-challenges http
+# ------------- 步骤 3：DNS & 端口检查 -------------
+echo "🔍  检查 DNS 解析..."
+DNS_IP=$(dig +short "$DOMAIN" @8.8.8.8 | tail -n1)
+SERVER_IP=$(curl -s4 ifconfig.me)
+[[ "$DNS_IP" == "$SERVER_IP" ]] || { echo "❌ DNS 解析 ($DNS_IP) 与本机 IP ($SERVER_IP) 不符"; exit 1; }
 
-LIVE_DIR="/etc/letsencrypt/live/$DOMAIN"
-cat <<EOF
+echo "🔍  检查 80/443 端口占用..."
+ss -ltn sport = :80 -o state listening | grep -q LISTEN && { echo "❌ 端口 80 被占用"; exit 1; }
+ss -ltn sport = :443 -o state listening | grep -q LISTEN && { echo "❌ 端口 443 被占用"; exit 1; }
 
-🎉 证书签发成功！
-  公钥 (fullchain) : $LIVE_DIR/fullchain.pem
-  私钥 (privkey)   : $LIVE_DIR/privkey.pem
+# ------------- 步骤 4：签发 / 续期 -------------
+if certbot certificates | grep -q "Domains: $DOMAIN"; then
+  echo "✔️  证书已存在，路径如下："
+  certbot certificates | grep -A2 "Domains: $DOMAIN"
+else
+  echo "⬜  申请证书..."
+  certbot certonly --standalone -d "$DOMAIN" -m "$EMAIL" --agree-tos --non-interactive --preferred-challenges http
+fi
 
-请将以上路径写入 VPN 配置，并重载/重启服务。
-EOF
+echo -e "\n✅ 全部完成！日志保存在 /var/log/mkbkboot.log"
