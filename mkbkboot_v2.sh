@@ -1,4 +1,41 @@
 #!/usr/bin/env bash
+# mkbkboot v2.3 — 先体检→再交互→幂等
+# curl -sSL https://raw.githubusercontent.com/AlexLing6er/mkbkboot/main/mkbkboot_v2.3.sh | sudo bash
+set -Eeuo pipefail
+trap 'echo -e "\n❌ 出错！查 /var/log/mkbkboot.log"; exit 1' ERR
+exec > >(tee -a /var/log/mkbkboot.log) 2>&1
+echo -e "\n================ 系统体检 $(date) ================"
+###########################
+# 0. 体检：现有 Swap & 证书 #
+###########################
+echo "🔎 当前 Swap 状态："
+if swapon --noheadings | awk '{print $1,$3,$4}'; then :; else echo "  (无已挂载 Swap)"; fi
+[[ -f /swapfile ]] && ls -lh /swapfile | sed 's/^/  - /'
+
+echo -e "\n🔎 已安装证书："
+CERTS_FOUND=0
+for d in /etc/letsencrypt/live/*; do
+  [[ -d "$d" ]] || continue
+  domain=$(basename "$d")
+  echo "  - $domain  →  $d"
+  CERTS_FOUND=1
+done
+[[ $CERTS_FOUND -eq 0 ]] && echo "  (未找到证书)"
+
+echo -e "\n================ 开始交互 ========================="
+###########################
+# 1. 工具&交互            #
+###########################
+prompt() { local t="$1" d="$2" v; while true; do read -r -p "$t [$d]: " v </dev/tty; v="${v:-$d}"; [[ -n "$v" ]] && { printf '%s' "$v"; return; }; done; }
+is_dom() { [[ "$1" =~ ^([A-Za-z0-9-]+\.)+[A-Za-z]{2,}$ ]]; }
+is_mail() { [[ "$1" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; }
+is_num() { [[ "$1" =~ ^[1-9][0-9]*$ ]]; }
+
+while true; do DOMAIN="$(prompt '要签发的域名(必填)' vpn.example.com)"; is_dom "$DOMAIN" && break; echo "❌ 域名格式错"; done
+while true; do EMAIL="$(prompt '通知邮箱(回车默认)' "root@$DOMAIN")"; is_mail "$EMAIL" && break; echo "❌ 邮箱格式错"; done
+while true; do SWAP_GB="$(prompt 'Swap 大小GB' 2)"; is_num "$SWAP_GB" && break; echo "❌ 需正整数"; done
+echo -e "➡️  域名:$DOMAIN  邮箱:$EMAIL  Swap:${SWAP_GB}G\n"
+
 # mkbkboot v2.2 — 幂等 + 自检 + 日志 + 结尾强提示
 # curl -sSL https://raw.githubusercontent.com/AlexLing6er/mkbkboot/main/mkbkboot_v2.2.sh | sudo bash
 set -Eeuo pipefail
