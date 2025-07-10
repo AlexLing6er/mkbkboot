@@ -1,25 +1,14 @@
 # mkbkboot
 
-为新 VPS **一键创建 2 GB Swap + 申请 Let's Encrypt 证书** 的脚本  
-（bash | Ubuntu/Debian 20.04+ | snap 版 Certbot | 自动续期）
+交互式一键脚本：  
+1. 创建自定义大小的 Swap  
+2. 安装 Certbot（snap）并签发 Let’s Encrypt 证书  
 
 ---
 
-## 快速使用
-### 全自动传参（CI / 自动化）
-```bash
-curl -sSL https://raw.githubusercontent.com/AlexLing6er/mkbkboot/main/mkbkboot.sh \
-  | sudo bash -s -- <DOMAIN> [EMAIL]
-```
-| 参数       | 是否必填 | 说明           | 默认值           |
-| -------- | ---- | ------------ | ------------- |
-| <DOMAIN> | ✅    | 要申请证书的完整域名   | —             |
-| \[EMAIL] | ❌    | 通知邮箱（证书续期提醒） | root@<DOMAIN> |
+## 使用方法
 
-
-### 零参数交互式（最省心）
+直接执行（脚本会逐步提示输入）：
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/AlexLing6er/mkbkboot/main/mkbkboot.sh | sudo bash
-```
-
