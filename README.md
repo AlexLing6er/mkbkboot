@@ -11,4 +11,4 @@
 直接执行（脚本会逐步提示输入）：
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/AlexLing6er/mkbkboot/main/mkbkboot_v2.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/AlexLing6er/mkbkboot/main/mkbkboot.sh | sudo bash
