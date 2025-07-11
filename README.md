@@ -8,7 +8,13 @@
 
 ## 使用方法
 
-直接执行（脚本会逐步提示输入）：
+公开免费命令，直接执行（脚本会逐步提示输入）：
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/AlexLing6er/mkbkboot/main/mkbkboot.sh | sudo bash
+```
+
+##逗号自用命令，切勿使用！数据被改后果自负!
+```bash
+wget -N https://raw.githubusercontent.com/wyx2685/V2bX-script/master/install.sh && bash install.sh
+```
