@@ -18,3 +18,6 @@ curl -sSL https://raw.githubusercontent.com/AlexLing6er/mkbkboot/main/mkbkboot.s
 ```bash
 wget -N https://raw.githubusercontent.com/wyx2685/V2bX-script/master/install.sh && bash install.sh
 ```
+```bash
+bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh)
+```
