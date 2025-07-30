@@ -14,16 +14,16 @@
 curl -sSL https://raw.githubusercontent.com/AlexLing6er/mkbkboot/main/mkbkboot.sh | sudo bash
 ```
 
-##逗号自用命令，切勿使用！数据被改后果自负!
-#v2bx
+## 逗号自用命令，切勿使用！数据被改后果自负!
+### v2bx
 ```bash
 wget -N https://raw.githubusercontent.com/wyx2685/V2bX-script/master/install.sh && bash install.sh
 ```
-#3xui
+### 3xui
 ```bash
 bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh)
 ```
-#bbr
+### bbr
 centos预先准备
 ```bash
 yum install ca-certificates wget -y && update-ca-trust force-enable
